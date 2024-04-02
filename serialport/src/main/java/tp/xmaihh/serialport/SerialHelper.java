@@ -53,6 +53,7 @@ public abstract class SerialHelper {
     public void close() {
         if (this.mReadThread != null) {
             this.mReadThread.interrupt();
+             this.mReadThread = null;
         }
         if (this.mSerialPort != null) {
             this.mSerialPort.close();
