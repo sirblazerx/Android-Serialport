@@ -51,23 +51,24 @@ public abstract class SerialHelper {
     }
 
     public void close() {
-    if (this.mReadThread != null) {
-        this.mReadThread.interrupt();
-        try {
-            this.mReadThread.join(); // Wait for the thread to finish
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt(); // Preserve interrupt status
-            // Handle the exception, e.g., log or rethrow if needed
+        if (this.mReadThread != null) {
+            this.mReadThread.interrupt();
+            try {
+                this.mReadThread.join(); // Wait for the thread to finish
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt(); // Preserve interrupt status
+                // Handle the exception, e.g., log or rethrow if needed
+            }
         }
+
+        if (this.mSerialPort != null) {
+            this.mSerialPort.close();
+            this.mSerialPort = null;
+        }
+
+        this._isOpen = false;
     }
 
-    if (this.mSerialPort != null) {
-        this.mSerialPort.close();
-        this.mSerialPort = null;
-    }
-
-    this._isOpen = false;
-}
 
     public void send(byte[] bOutArray) {
         try {
@@ -92,31 +93,49 @@ public abstract class SerialHelper {
         private ReadThread() {
         }
 
+        public void run() {
+            super.run();
+            try {
+                while (!isInterrupted()) {
+                    if (SerialHelper.this.mInputStream == null) {
+                        return; // Exit if the input stream is not set up
+                    }
 
-    public void run() {
-    try {
-        while (!isInterrupted()) {
-            synchronized (this) {
-                while (suspendFlag) {
-                    wait(); // This can throw InterruptedException
+                    byte[] buffer = getStickPackageHelper().execute(SerialHelper.this.mInputStream);
+                    if (buffer != null && buffer.length > 0) {
+                        ComBean ComRecData = new ComBean(SerialHelper.this.sPort, buffer, buffer.length);
+                        SerialHelper.this.onDataReceived(ComRecData);
+                    }
+                    // Additional logic for handling serial data...
+
+                    // Sleep for a short duration to avoid tight looping
+                    try {
+                        Thread.sleep(50); // Adjust sleep duration as needed
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt(); // Restore interrupt status
+                        return; // Exit the loop to terminate the thread
+                    }
+                }
+            } catch (Throwable e) {
+                // Handle or log the throwable
+                Log.e("SerialHelper", "Error in serial port read thread", e);
+            } finally {
+                // Clean up resources, e.g., close input streams
+                closeInputStream(SerialHelper.this.mInputStream);
+            }
+        }
+
+        private void closeInputStream(InputStream inputStream) {
+            if (inputStream != null) {
+                try {
+                    inputStream.close();
+                } catch (IOException e) {
+                    Log.e("SerialHelper", "Failed to close input stream", e);
                 }
             }
-
-            // Perform the main action of the thread
-            SerialHelper.this.send(SerialHelper.this.getbLoopData());
-
-            // Sleep for the specified delay
-            Thread.sleep(SerialHelper.this.iDelay);
         }
-    } catch (InterruptedException e) {
-        // Preserve the interrupt status
-        Thread.currentThread().interrupt();
-        // Log the interruption or perform cleanup here
-    } finally {
-        // Perform any necessary cleanup or resource release
-    }
-}
 
+    }
 
     private class SendThread
             extends Thread {
@@ -285,5 +304,4 @@ public abstract class SerialHelper {
         this.mStickPackageHelper = mStickPackageHelper;
     }
 
-}
 }
