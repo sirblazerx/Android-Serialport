@@ -92,8 +92,8 @@ public abstract class SerialHelper {
         private ReadThread() {
         }
 
- @Override
-public void run() {
+
+    public void run() {
     try {
         while (!isInterrupted()) {
             synchronized (this) {
