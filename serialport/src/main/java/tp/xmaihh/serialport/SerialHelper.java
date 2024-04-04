@@ -51,16 +51,23 @@ public abstract class SerialHelper {
     }
 
     public void close() {
-        if (this.mReadThread != null) {
-            this.mReadThread.interrupt();
-             this.mReadThread = null;
+    if (this.mReadThread != null) {
+        this.mReadThread.interrupt();
+        try {
+            this.mReadThread.join(); // Wait for the thread to finish
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt(); // Preserve interrupt status
+            // Handle the exception, e.g., log or rethrow if needed
         }
-        if (this.mSerialPort != null) {
-            this.mSerialPort.close();
-            this.mSerialPort = null;
-        }
-        this._isOpen = false;
     }
+
+    if (this.mSerialPort != null) {
+        this.mSerialPort.close();
+        this.mSerialPort = null;
+    }
+
+    this._isOpen = false;
+}
 
     public void send(byte[] bOutArray) {
         try {
@@ -85,41 +92,31 @@ public abstract class SerialHelper {
         private ReadThread() {
         }
 
-        public void run() {
-            super.run();
-            while (!isInterrupted()) {
-                try {
-                    if (SerialHelper.this.mInputStream == null) {
-                        return;
-                    }
-
-                    byte[] buffer = getStickPackageHelper().execute(SerialHelper.this.mInputStream);
-                    if (buffer != null && buffer.length > 0) {
-                        ComBean ComRecData = new ComBean(SerialHelper.this.sPort, buffer, buffer.length);
-                        SerialHelper.this.onDataReceived(ComRecData);
-                    }
-//                    int available = SerialHelper.this.mInputStream.available();
-//
-//                    if (available > 0) {
-//                        byte[] buffer = new byte['?'];
-//                        int size = SerialHelper.this.mInputStream.read(buffer);
-//                        if (size > 0) {
-//                            ComBean ComRecData = new ComBean(SerialHelper.this.sPort, buffer, size);
-//                            SerialHelper.this.onDataReceived(ComRecData);
-//                        }
-//                    } else {
-//                        SystemClock.sleep(50);
-//                    }
-
-                } catch (Throwable e) {
-                     if (e.getMessage() != null) {
-                        Log.e("error", e.getMessage());
-                    }
-                    return;
+ @Override
+public void run() {
+    try {
+        while (!isInterrupted()) {
+            synchronized (this) {
+                while (suspendFlag) {
+                    wait(); // This can throw InterruptedException
                 }
             }
+
+            // Perform the main action of the thread
+            SerialHelper.this.send(SerialHelper.this.getbLoopData());
+
+            // Sleep for the specified delay
+            Thread.sleep(SerialHelper.this.iDelay);
         }
+    } catch (InterruptedException e) {
+        // Preserve the interrupt status
+        Thread.currentThread().interrupt();
+        // Log the interruption or perform cleanup here
+    } finally {
+        // Perform any necessary cleanup or resource release
     }
+}
+
 
     private class SendThread
             extends Thread {
